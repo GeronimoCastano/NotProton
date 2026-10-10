@@ -19,6 +19,7 @@ enum DeploymentContent {
         let name: String
         var allowsResigning = false
         var executable = false
+        var needsClientStopped = true
 
         func matches() throws -> Bool {
             let expected = try Digest.sha256(of: source)
@@ -106,7 +107,7 @@ enum DeploymentContent {
 
     static func files(
         payload: InstallPayload.Located, bridgePayload: BridgePayload.Located,
-        app: URL, bridge: URL, signatures: URL, overlayShim: URL, iconmaker: URL, appinfo: URL,
+        app: URL, bridge: URL, signatures: URL, fonts: URL, overlayShim: URL, iconmaker: URL, appinfo: URL,
         compatTools: URL, tools: [InstalledTool], runners: URL
     ) -> [File] {
         var files = [
@@ -119,6 +120,10 @@ enum DeploymentContent {
         files += payload.signatures.map {
             File(source: $0, destination: signatures.appending(path: $0.lastPathComponent),
                  name: "signatures/\($0.lastPathComponent)")
+        }
+        files += payload.fonts.map {
+            File(source: payload.fontsRoot.appending(path: $0), destination: fonts.appending(path: $0),
+                 name: "fonts/\($0)", needsClientStopped: false)
         }
         for entry in bridgePayload.sources {
             files += entry.bridgePaths.map {
@@ -150,6 +155,7 @@ enum DeploymentContent {
                 .filter { Digest.sha256IfPresent($0.destination) != $0.hash }.map(\.name)
             let files = files(payload: payload, bridgePayload: bridge, app: SupportPaths.Steam.app,
                               bridge: SupportPaths.bridge, signatures: SupportPaths.signatures,
+                              fonts: SupportPaths.fonts,
                               overlayShim: SupportPaths.overlayShim, iconmaker: SupportPaths.iconmaker,
                               appinfo: SupportPaths.appinfo, compatTools: SupportPaths.Steam.compatTools,
                               tools: CompatToolList.installed(), runners: SupportPaths.runners)

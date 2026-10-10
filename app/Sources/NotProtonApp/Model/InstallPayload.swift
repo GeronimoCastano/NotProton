@@ -14,6 +14,8 @@ enum InstallPayload {
         let builtAt: Int64
 
         let signatures: [URL]
+        let fontsRoot: URL
+        let fonts: [String]
     }
 
     static func root(in bundle: Bundle = .module) throws -> URL {
@@ -64,6 +66,11 @@ enum InstallPayload {
 
         if signatures.isEmpty { missing.append("signatures/macos.arm64/*.json") }
 
+        let fontsRoot = root.appending(path: "fonts")
+        let fonts = (files.subpaths(atPath: fontsRoot.path(percentEncoded: false)) ?? [])
+            .filter { $0.hasSuffix(".ttf") || $0.hasSuffix(".ttc") }.sorted()
+        if fonts.isEmpty { missing.append("fonts") }
+
         guard missing.isEmpty, let builtAt, builtAt > 0 else {
             throw StepFailure(
                 step: step,
@@ -74,7 +81,8 @@ enum InstallPayload {
 
         return Located(
             dylib: dylib, overlayShim: shim, iconmaker: iconmaker,
-            appinfo: appinfo, run: run, builtAt: builtAt, signatures: signatures
+            appinfo: appinfo, run: run, builtAt: builtAt, signatures: signatures,
+            fontsRoot: fontsRoot, fonts: fonts
         )
     }
 }

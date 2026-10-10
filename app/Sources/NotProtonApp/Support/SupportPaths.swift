@@ -29,6 +29,7 @@ enum SupportPaths {
         support.appending(path: "signatures/macos.arm64")
     }
 
+    static var fonts: URL { support.appending(path: "fonts") }
     static var overlayShim: URL { support.appending(path: "overlay-shim.dylib") }
     static var iconmaker: URL { support.appending(path: "iconmaker") }
     static var appinfo: URL { support.appending(path: "appinfo") }

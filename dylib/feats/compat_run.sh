@@ -879,6 +879,28 @@ map_game_drive() {
   fi
 }
 
+# Implementation of Proton's create_fonts_symlinks().
+link_fonts() {
+  [ -f "$WINEPREFIX/system.reg" ] || return 0
+  fonts_dir="$WINEPREFIX/drive_c/windows/Fonts"
+  mkdir -p "$fonts_dir" 2>> "$log" || return 0
+  for dir in "$np_support/fonts" "$CX_ROOT/share/wine/fonts"; do
+    for src in "$dir"/*.ttf "$dir"/*.ttc; do
+      [ -f "$src" ] || continue
+      name=$(basename "$src")
+      case "$app_id:$name" in
+        1313860:arial.ttf|1506830:arial.ttf) src="$dir/alt/$name" ;;
+      esac
+      dst="$fonts_dir/$name"
+      if [ -L "$dst" ]; then
+        rm -f "$dst" && ln -s "$src" "$dst" 2>> "$log" || true
+      elif [ ! -e "$dst" ]; then
+        ln -s "$src" "$dst" 2>> "$log" || true
+      fi
+    done
+  done
+}
+
 if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
   export WINEPREFIX="$STEAM_COMPAT_DATA_PATH/pfx"
   stage_step="prefix lock"
@@ -912,6 +934,8 @@ if [ -n "$STEAM_COMPAT_DATA_PATH" ]; then
   map_game_drive
   stage_step="prefix settings"
   import_prefix_settings
+  stage_step="fonts"
+  link_fonts
   # A prefix that Wine built just now only has dosdevices from this point on.
   stage_step="game drive"
   map_game_drive

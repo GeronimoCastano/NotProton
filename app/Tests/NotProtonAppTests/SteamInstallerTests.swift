@@ -47,6 +47,10 @@ struct SteamInstallerTests {
 
         try Data("{}".utf8).write(to: signatureDir.appending(path: "1788400362.json"))
         try Data("{}".utf8).write(to: signatureDir.appending(path: "1788652215.json"))
+        let altFonts = root.appending(path: "fonts/alt")
+        try FileManager.default.createDirectory(at: altFonts, withIntermediateDirectories: true)
+        try Data("arial".utf8).write(to: root.appending(path: "fonts/arial.ttf"))
+        try Data("alt arial".utf8).write(to: altFonts.appending(path: "arial.ttf"))
 
         return try InstallPayload.locate(root: root)
     }
@@ -60,6 +64,7 @@ struct SteamInstallerTests {
         var plist: URL { app.appending(path: "Contents/Info.plist") }
         var deployedDylib: URL { app.appending(path: "Contents/MacOS/\(SupportPaths.dylibName)") }
         var signatures: URL { support.appending(path: "signatures/macos.arm64") }
+        var fonts: URL { support.appending(path: "fonts") }
         var overlayShim: URL { support.appending(path: "overlay-shim.dylib") }
         var iconmaker: URL { support.appending(path: "iconmaker") }
         var appinfo: URL { support.appending(path: "appinfo") }
@@ -103,6 +108,7 @@ struct SteamInstallerTests {
             app: fixture.app,
             bridge: fixture.bridge,
             signatures: fixture.signatures,
+            fonts: fixture.fonts,
             overlayShim: fixture.overlayShim,
             iconmaker: fixture.iconmaker,
             appinfo: fixture.appinfo,
@@ -533,10 +539,24 @@ struct SteamInstallerTests {
         let bridge = try BridgePayload.locate()
         let files = DeploymentContent.files(payload: fixture.payload, bridgePayload: bridge, app: fixture.app,
                                             bridge: fixture.bridge, signatures: fixture.signatures,
-                                            overlayShim: fixture.overlayShim, iconmaker: fixture.iconmaker,
+                                            fonts: fixture.fonts, overlayShim: fixture.overlayShim, iconmaker: fixture.iconmaker,
                                             appinfo: fixture.appinfo, compatTools: work.appending(path: "compatibilitytools.d"),
                                             tools: tools, runners: runners)
         #expect(try files.allSatisfy { try $0.matches() })
+    }
+
+    @Test("Fonts a newer build no longer ships are removed")
+    func removesStaleFonts() throws {
+        let work = try scratchDirectory("install-stale-fonts")
+        defer { try? FileManager.default.removeItem(at: work) }
+        let fonts = work.appending(path: "fonts")
+        try FileManager.default.createDirectory(at: fonts.appending(path: "alt"), withIntermediateDirectories: true)
+        for name in ["arial.ttf", "old.ttf", "alt/arial.ttf", "alt/old.ttf"] {
+            try Data("font".utf8).write(to: fonts.appending(path: name))
+        }
+        try SteamInstaller.removeStaleFonts(in: fonts, keeping: ["arial.ttf", "alt/arial.ttf"])
+        let left = (FileManager.default.subpaths(atPath: fonts.path(percentEncoded: false)) ?? []).sorted()
+        #expect(left == ["alt", "alt/arial.ttf", "arial.ttf"])
     }
 
     @Test("A running game prevents file replacement before Steam is stopped")

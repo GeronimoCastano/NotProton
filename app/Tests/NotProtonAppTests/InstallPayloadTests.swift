@@ -6,7 +6,7 @@ import Testing
 @Suite("Install payload")
 struct InstallPayloadTests {
 
-    private func stage(_ root: URL, dylib: Bool = true, shim: Bool = true, iconmaker: Bool = true, appinfo: Bool = true, signatures: [String] = ["1788400362.json"]) throws {
+    private func stage(_ root: URL, dylib: Bool = true, shim: Bool = true, iconmaker: Bool = true, appinfo: Bool = true, signatures: [String] = ["1788400362.json"], fonts: [String] = ["arial.ttf"]) throws {
         let files = FileManager.default
         let signatureDir = root.appending(path: "signatures/macos.arm64")
         try files.createDirectory(at: signatureDir, withIntermediateDirectories: true)
@@ -19,6 +19,11 @@ struct InstallPayloadTests {
         for name in signatures {
             try Data("{}".utf8).write(to: signatureDir.appending(path: name))
         }
+        for name in fonts {
+            let font = root.appending(path: "fonts/\(name)")
+            try files.createDirectory(at: font.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data("font".utf8).write(to: font)
+        }
     }
 
     @Test("The shipped app carries a payload staged by make")
@@ -29,6 +34,8 @@ struct InstallPayloadTests {
         #expect(located.overlayShim.lastPathComponent == "overlay-shim.dylib")
         #expect(located.appinfo.lastPathComponent == "appinfo")
         #expect(!located.signatures.isEmpty)
+        #expect(located.fonts.contains("arial.ttf"))
+        #expect(located.fonts.contains("alt/arial.ttf"))
 
         // A real fat dylib, not a placeholder: an install that copied a stub would
         // deploy something dyld refuses at launch.
@@ -87,7 +94,7 @@ struct InstallPayloadTests {
     func reportsEverythingMissing() throws {
         let root = try scratchDirectory("payload")
         defer { try? FileManager.default.removeItem(at: root) }
-        try stage(root, dylib: false, shim: false, iconmaker: false, appinfo: false, signatures: [])
+        try stage(root, dylib: false, shim: false, iconmaker: false, appinfo: false, signatures: [], fonts: [])
 
         do {
             _ = try InstallPayload.locate(root: root)
@@ -98,6 +105,7 @@ struct InstallPayloadTests {
             #expect(failure.detail.contains("iconmaker"))
             #expect(failure.detail.contains("appinfo"))
             #expect(failure.detail.contains("signatures/macos.arm64"))
+            #expect(failure.detail.contains("fonts"))
         }
     }
 

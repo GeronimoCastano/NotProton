@@ -58,6 +58,7 @@ enum SteamInstaller {
         app: URL = SupportPaths.Steam.app,
         bridge: URL = SupportPaths.bridge,
         signatures: URL = SupportPaths.signatures,
+        fonts: URL = SupportPaths.fonts,
         overlayShim: URL = SupportPaths.overlayShim,
         iconmaker: URL = SupportPaths.iconmaker,
         appinfo: URL = SupportPaths.appinfo,
@@ -99,7 +100,7 @@ enum SteamInstaller {
         let tools = CompatToolList.installed(runners: runners, file: support.appending(path: "tools"))
         let files = DeploymentContent.files(
             payload: payload, bridgePayload: bridgeLocated, app: app, bridge: bridge,
-            signatures: signatures, overlayShim: overlayShim, iconmaker: iconmaker, appinfo: appinfo,
+            signatures: signatures, fonts: fonts, overlayShim: overlayShim, iconmaker: iconmaker, appinfo: appinfo,
             compatTools: compatTools, tools: tools, runners: runners)
         let content = try DeploymentContent.inspect(files: files, bundled: build, installed: previousBuild,
                                                    legacyVersion: SteamBundle.deployedVersion(at: deployedVersion))
@@ -118,7 +119,7 @@ enum SteamInstaller {
         }
         let patching = try needsPatching(plist: plist, dylib: dylib, shipping: payload.dylib, app: app)
         let replacingFiles = try files.contains {
-            try !$0.matches() && FileManager.default.fileExists(atPath: $0.destination.path(percentEncoded: false))
+            try $0.needsClientStopped && !$0.matches() && FileManager.default.fileExists(atPath: $0.destination.path(percentEncoded: false))
         }
         let pinned = try DeploymentContent.pinnedFiles(bridge: bridge, runners: runners)
         let existingAccount = previousBuild != nil || SteamBundle.deployedVersion(at: deployedVersion) != nil
@@ -149,6 +150,7 @@ enum SteamInstaller {
         for file in files where file.destination != dylib {
             try installIfChanged(file)
         }
+        try removeStaleFonts(in: fonts, keeping: payload.fonts)
 
         var backedUp = false
         if patching {
@@ -214,6 +216,19 @@ enum SteamInstaller {
         try write(outcome.version, to: deployedVersion)
         try atomicReplace(DeploymentContent.record(beside: deployedVersion),
                           with: JSONEncoder().encode(outcome.build), step: step)
+    }
+
+    static func removeStaleFonts(in fonts: URL, keeping shipped: [String]) throws {
+        let files = FileManager.default
+        let keep = Set(shipped)
+        for rel in files.subpaths(atPath: fonts.path(percentEncoded: false)) ?? [] where !keep.contains(rel) {
+            let url = fonts.appending(path: rel)
+            var isDirectory: ObjCBool = false
+            if files.fileExists(atPath: url.path(percentEncoded: false), isDirectory: &isDirectory), isDirectory.boolValue {
+                continue
+            }
+            try WriteRefused.catching(url) { try files.removeItem(at: url) }
+        }
     }
 
     static func installIfChanged(_ file: DeploymentContent.File) throws {

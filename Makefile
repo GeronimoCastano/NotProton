@@ -59,7 +59,7 @@ TARGET      := $(OUT_DIR)/notproton.dylib
 OBJS := $(patsubst %.c,$(OUT_DIR)/%.o,$(SRCS))
 DEPS := $(OBJS:.o=.d)
 
-.PHONY: all clean rebuild dobby deploy dylib dylib-install sigcheck app-payload app app-zip \
+.PHONY: all clean rebuild dobby deploy dylib dylib-install sigcheck fonts fonts-install app-payload app app-zip \
         anchorcheck callscheck sigdb-fixtures webpatch-fixtures peicon-fixtures panel-behavior app-tests \
         tests-list overlay-shim overlay-shim-install overlay-shim-tests \
         overlay-shim-bench iconmaker icon \
@@ -474,7 +474,15 @@ sigdb-install:
 
 LAUNCHABLE_BUNDLES := $(HOME)/Desktop/NotProton.app /Applications/NotProton.app
 
-deploy: $(TARGET) dylib-install sigdb-install helpers-install
+FONT_FILES := --include='*/' --include='*.ttf' --include='*.ttc' --exclude='*'
+
+fonts-install:
+	@if [ ! -d build/fonts ]; then echo "build/fonts is missing, run: $(MAKE) fonts" >&2; exit 1; fi
+	@mkdir -p "$(SUPPORT_DIR)/fonts"
+	@rsync -a --delete $(FONT_FILES) build/fonts/ "$(SUPPORT_DIR)/fonts/"
+	@echo "==> Installed: $(SUPPORT_DIR)/fonts"
+
+deploy: $(TARGET) dylib-install sigdb-install fonts-install helpers-install
 	@if [ ! -d "$(STEAM_APP)" ]; then \
 		echo "==> deploy: $(STEAM_APP) not found"; exit 1; fi
 	$(call install_atomically,$(TARGET),$(DEPLOY_DST))
@@ -507,6 +515,9 @@ bridge:
 	steam-shim/build.sh
 	@echo "==> Built the bridge, now run: $(MAKE) app-payload"
 
+fonts:
+	fonts/build.sh
+
 app-payload: $(TARGET) $(OVERLAY_SHIM) $(ICONMAKER) $(APPINFO)
 	@mkdir -p "$(APP_PAYLOAD)/signatures/macos.arm64"
 	@mkdir -p "$(APP_PAYLOAD)/bridge"
@@ -522,6 +533,9 @@ app-payload: $(TARGET) $(OVERLAY_SHIM) $(ICONMAKER) $(APPINFO)
 		elif [ -f "$$dst" ]; then echo "==> keeping staged $${spec##*:}"; \
 		else echo "$$src is missing and nothing is staged at $$dst, run: $(MAKE) bridge" >&2; exit 1; fi; \
 	done
+	@if [ ! -d build/fonts ]; then echo "build/fonts is missing, run: $(MAKE) fonts" >&2; exit 1; fi
+	@mkdir -p "$(APP_PAYLOAD)/fonts"
+	@rsync -a --delete build/fonts/ "$(APP_PAYLOAD)/fonts/"
 	@stamp="$$(git log -1 --format=%ct 2>/dev/null)"; \
 	if [ -z "$$stamp" ]; then echo "build-time needs a git checkout" >&2; exit 1; fi; \
 	echo "$$stamp" > "$(APP_PAYLOAD)/build-time"
